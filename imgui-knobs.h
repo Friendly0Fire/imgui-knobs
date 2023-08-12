@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdlib>
+
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
 
 typedef int ImGuiKnobFlags;
@@ -10,6 +12,8 @@ enum ImGuiKnobFlags_ {
     ImGuiKnobFlags_NoInput = 1 << 1,
     ImGuiKnobFlags_ValueTooltip = 1 << 2,
     ImGuiKnobFlags_DragHorizontal = 1 << 3,
+    ImGuiKnobFlags_RotateRelative = 1 << 4,
+    ImGuiKnobFlags_RotateAbsolute = 1 << 5,
 };
 
 typedef int ImGuiKnobVariant;
