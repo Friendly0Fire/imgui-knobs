@@ -6,8 +6,6 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
-#define IMGUIKNOBS_PI 3.14159265358979323846f
-
 namespace ImGuiKnobs {
     namespace detail {
 
@@ -26,9 +24,8 @@ namespace ImGuiKnobs {
 
         inline float get_angle(const ImVec2& point1, const ImVec2& point2) {
             ImVec2 dir(point2.x - point1.x, point2.y - point1.y);
-            float angle = atan2(-dir.y, -dir.x);
-            angle += (IMGUIKNOBS_PI * 2.5f);
-            angle = fmod(angle, IMGUIKNOBS_PI * 2.0f);
+            float angle = atan2(dir.y, dir.x) - IMGUIKNOBS_PI * 0.5f;
+            angle = fmod(angle + IMGUIKNOBS_PI * 2.f, IMGUIKNOBS_PI * 2.0f);
 
             return angle;
         }
@@ -68,7 +65,7 @@ namespace ImGuiKnobs {
             auto overlap = thickness * radius * 0.00001f * IMGUIKNOBS_PI;
             auto delta = end_angle - start_angle;
             auto bez_step = 1.0f / bezier_count;
-            auto mid_angle = start_angle + overlap;
+            auto mid_angle = start_angle + overlap + IMGUIKNOBS_PI * 0.5f;
 
             for (auto i = 0; i < bezier_count - 1; i++) {
                 auto mid_angle2 = delta * bez_step + mid_angle;
@@ -93,8 +90,7 @@ namespace ImGuiKnobs {
             float angle_cos;
             float angle_sin;
 
-
-            bool wrap_around(DataType p_value,DataType prev_value, DataType v_min, DataType v_max) const noexcept {
+            bool wrap_around(DataType p_value, DataType prev_value, DataType v_min, DataType v_max) const noexcept {
                 static const float epsilon = 0.05f;
 
                 if (   (p_value >= v_max * (1.0f - epsilon) && prev_value <= v_min * (1.0f + epsilon))
@@ -119,70 +115,62 @@ namespace ImGuiKnobs {
                 if (g.ActiveId != id)
                     return false;
 
-                if (absolute_rot) {
-                    ImVec2 mouse_pos = imgui_io.MousePos;
-                    float input_angle = get_angle(center ,mouse_pos);
-                    DataType prev_value = *p_value;
+                ImVec2 mouse_pos, mouse_pos_prev;
 
-                    *p_value = static_cast<DataType>(map_range_clamped(input_angle, 0.25f * IMGUIKNOBS_PI, 1.75f * IMGUIKNOBS_PI, 1.0f * v_min, 1.0f * v_max));
+                if (imgui_io.MouseDownDuration[0] > 0.0f) {
+                    mouse_pos = imgui_io.MousePos;
 
-                    if( wrap_around(*p_value, prev_value, v_min, v_max) || fabs(*p_value - prev_value) > (v_min + v_max) * 0.75f) {
-                        *p_value = prev_value;
-                    }
-
-                    value_changed = (prev_value != *p_value);
+                    mouse_pos_prev = imgui_io.MousePos;
+                    mouse_pos_prev.x -= imgui_io.MouseDelta.x;
+                    mouse_pos_prev.y -= imgui_io.MouseDelta.y;
+                } else {
+                    mouse_pos = imgui_io.MouseClickedPos[0];
+                    mouse_pos_prev = imgui_io.MouseClickedPos[0];
                 }
-                else {
-                    ImVec2 mouse_pos, mouse_pos_prev;
 
-                    if (imgui_io.MouseDownDuration[0] > 0.0f) {
-                        mouse_pos = imgui_io.MousePos;
+                float input_angle_prev = get_angle(center, mouse_pos_prev);
+                float input_angle = get_angle(center, mouse_pos);
 
-                        mouse_pos_prev = imgui_io.MousePos;
-                        mouse_pos_prev.x -= imgui_io.MouseDelta.x;
-                        mouse_pos_prev.y -= imgui_io.MouseDelta.y;
-                    }
-                    else {
-                        mouse_pos = imgui_io.MouseClickedPos[0];
-                        mouse_pos_prev = imgui_io.MouseClickedPos[0];
-                    }
-
-                    float input_angle_prev = get_angle(center,mouse_pos_prev);
-                    float input_angle = get_angle(center,mouse_pos);
-
-                    if (input_angle_prev != input_angle) {
-                        DataType prev_value = *p_value;
+                if (input_angle_prev != input_angle) {
+                    DataType prev_value = *p_value;
+                    if (absolute_rot) {
+                        *p_value = static_cast<DataType>(map_range_clamped(input_angle, angle_min, angle_max, static_cast<float>(v_min), static_cast<float>(v_max)));
+                    } else {
                         //if (!speed)  // speed == 0 is changed in knob_with_drag.
                         {
                             speed = (v_max-v_min) * IMGUIKNOBS_PI * 0.4f;
                         }
 
-                       *p_value += static_cast<DataType>(map_range_clamped(input_angle - input_angle_prev, -2.0f * IMGUIKNOBS_PI, 2.0f * IMGUIKNOBS_PI, -speed, speed));
+                       *p_value += static_cast<DataType>(map_range_clamped(input_angle - input_angle_prev, 0.f, 2.f * IMGUIKNOBS_PI, -speed, speed));
                        if (*p_value < v_min)
                            *p_value = v_min;
                        if (*p_value > v_max)
                            *p_value = v_max;
+                    }
 
-                       if (wrap_around(*p_value, prev_value, v_min, v_max)  || fabs(input_angle - input_angle_prev) > IMGUIKNOBS_PI) {
-                           *p_value = prev_value;
-                           value_changed = false;
-                       }
-                       else {
-                            value_changed = true;
-                       }
-                    }
-                    else {
+                    if (wrap_around(*p_value, prev_value, v_min, v_max) || fabs(input_angle - input_angle_prev) > IMGUIKNOBS_PI) {
+                        *p_value = prev_value;
                         value_changed = false;
+                    } else {
+                        value_changed = true;
                     }
+                } else {
+                    value_changed = false;
                 }
 
                 return value_changed;
             }
 
 
-            knob(const char *_label, ImGuiDataType data_type, DataType *p_value, DataType v_min, DataType v_max, float speed, float _radius, const char *format, ImGuiKnobFlags flags) {
+            knob(const char *_label, ImGuiDataType data_type, DataType *p_value,
+                DataType v_min, DataType v_max, float speed, float _radius,
+                const char *format, ImGuiKnobFlags flags, ImVec2 angle_min_max) {
+
+                angle_min = angle_min_max.x;
+                angle_max = angle_min_max.y;
+
                 radius = _radius;
-                t = ((float) *p_value - v_min) / (v_max - v_min);
+                t = (static_cast<float>(*p_value) - static_cast<float>(v_min)) / (static_cast<float>(v_max) - static_cast<float>(v_min));
                 auto screen_pos = ImGui::GetCursorScreenPos();
                 center = {screen_pos[0] + radius, screen_pos[1] + radius};
 
@@ -191,9 +179,8 @@ namespace ImGuiKnobs {
                 auto gid = ImGui::GetID(_label);
 
                 if((flags & (ImGuiKnobFlags_RotateRelative | ImGuiKnobFlags_RotateAbsolute))) {
-                    value_changed = rotate_behavior(gid,p_value, v_min, v_max, speed, flags == ImGuiKnobFlags_RotateAbsolute);
-                }
-                else {
+                    value_changed = rotate_behavior(gid,p_value, v_min, v_max, speed, flags & ImGuiKnobFlags_RotateAbsolute);
+                } else {
                     ImGuiSliderFlags drag_flags = 0;
                     if (!(flags & ImGuiKnobFlags_DragHorizontal))
                         drag_flags |= ImGuiSliderFlags_Vertical;
@@ -201,9 +188,6 @@ namespace ImGuiKnobs {
                     value_changed = ImGui::DragBehavior(gid, data_type, p_value, speed, &v_min, &v_max, format, drag_flags);
                 }
 
-
-                angle_min = IMGUIKNOBS_PI * 0.75f;
-                angle_max = IMGUIKNOBS_PI * 2.25f;
                 is_active = ImGui::IsItemActive();
                 is_hovered = ImGui::IsItemHovered();
                 angle = angle_min + (angle_max - angle_min) * t;
@@ -214,6 +198,7 @@ namespace ImGuiKnobs {
             void draw_dot(float size, float radius, float angle, color_set color, bool filled, int segments) {
                 auto dot_size = size * this->radius;
                 auto dot_radius = radius * this->radius;
+                angle += IMGUIKNOBS_PI * 0.5f;
 
                 ImGui::GetWindowDrawList()->AddCircleFilled(
                         {center[0] + cosf(angle) * dot_radius, center[1] + sinf(angle) * dot_radius},
@@ -225,6 +210,7 @@ namespace ImGuiKnobs {
             void draw_tick(float start, float end, float width, float angle, color_set color) {
                 auto tick_start = start * radius;
                 auto tick_end = end * radius;
+                angle += IMGUIKNOBS_PI * 0.5f;
                 auto angle_cos = cosf(angle);
                 auto angle_sin = sinf(angle);
 
@@ -261,7 +247,9 @@ namespace ImGuiKnobs {
         };
 
         template<typename DataType>
-        knob<DataType> knob_with_drag(const char *label, ImGuiDataType data_type, DataType *p_value, DataType v_min, DataType v_max, float _speed, const char *format, float size, ImGuiKnobFlags flags) {
+        knob<DataType> knob_with_drag(const char *label, ImGuiDataType data_type, DataType *p_value,
+            DataType v_min, DataType v_max, float _speed,
+            const char *format, float size, ImGuiKnobFlags flags, ImVec2 angle_min_max) {
             auto speed = _speed == 0 ? (v_max - v_min) / 250.f : _speed;
             ImGui::PushID(label);
             auto width = size == 0 ? ImGui::GetTextLineHeight() * 4.0f : size * ImGui::GetIO().FontGlobalScale;
@@ -284,7 +272,7 @@ namespace ImGuiKnobs {
             }
 
             // Draw knob
-            knob<DataType> k(label, data_type, p_value, v_min, v_max, speed, width * 0.5f, format, flags);
+            knob<DataType> k(label, data_type, p_value, v_min, v_max, speed, width * 0.5f, format, flags, angle_min_max);
 
             // Draw tooltip
             if (flags & ImGuiKnobFlags_ValueTooltip && (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) || ImGui::IsItemActive())) {
@@ -344,8 +332,10 @@ namespace ImGuiKnobs {
 
 
     template<typename DataType>
-    bool BaseKnob(const char *label, ImGuiDataType data_type, DataType *p_value, DataType v_min, DataType v_max, float speed, const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps = 10) {
-        auto knob = detail::knob_with_drag(label, data_type, p_value, v_min, v_max, speed, format, size, flags);
+    bool BaseKnob(const char *label, ImGuiDataType data_type, DataType *p_value,
+        DataType v_min, DataType v_max, float speed,
+        const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps = 10, ImVec2 angle_min_max = ImVec2(IMGUIKNOBS_PI * 0.25f, IMGUIKNOBS_PI * 1.75f)) {
+        auto knob = detail::knob_with_drag(label, data_type, p_value, v_min, v_max, speed, format, size, flags, angle_min_max);
 
         switch (variant) {
             case ImGuiKnobVariant_Tick: {
@@ -383,8 +373,8 @@ namespace ImGuiKnobs {
                 break;
             }
             case ImGuiKnobVariant_Stepped: {
-                for (auto n = 0.f; n < steps; n++) {
-                    auto a = n / (steps - 1);
+                for (auto n = 0; n < steps; n++) {
+                    auto a = static_cast<float>(n) / (static_cast<float>(steps) - 1.f);
                     auto angle = knob.angle_min + (knob.angle_max - knob.angle_min) * a;
                     knob.draw_tick(0.7f, 0.9f, 0.04f, angle, detail::GetPrimaryColorSet());
                 }
@@ -408,14 +398,14 @@ namespace ImGuiKnobs {
         return knob.value_changed;
     }
 
-    bool Knob(const char *label, float *p_value, float v_min, float v_max, float speed, const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps) {
+    bool Knob(const char *label, float *p_value, float v_min, float v_max, float speed, const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps, ImVec2 angle_min_max) {
         const char *_format = format == NULL ? "%.3f" : format;
-        return BaseKnob(label, ImGuiDataType_Float, p_value, v_min, v_max, speed, _format, variant, size, flags, steps);
+        return BaseKnob(label, ImGuiDataType_Float, p_value, v_min, v_max, speed, _format, variant, size, flags, steps, angle_min_max);
     }
 
-    bool KnobInt(const char *label, int *p_value, int v_min, int v_max, float speed, const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps) {
+    bool KnobInt(const char *label, int *p_value, int v_min, int v_max, float speed, const char *format, ImGuiKnobVariant variant, float size, ImGuiKnobFlags flags, int steps, ImVec2 angle_min_max) {
         const char *_format = format == NULL ? "%i" : format;
-        return BaseKnob(label, ImGuiDataType_S32, p_value, v_min, v_max, speed, _format, variant, size, flags, steps);
+        return BaseKnob(label, ImGuiDataType_S32, p_value, v_min, v_max, speed, _format, variant, size, flags, steps, angle_min_max);
     }
 
 }// namespace ImGuiKnobs
