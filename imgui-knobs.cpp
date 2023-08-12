@@ -190,6 +190,19 @@ namespace ImGuiKnobs {
 
                 is_active = ImGui::IsItemActive();
                 is_hovered = ImGui::IsItemHovered();
+
+                ImGui::SetItemUsingMouseWheel();
+
+                if (is_hovered && ImGui::GetIO().MouseWheel != 0.f) {
+                    t = std::min(1.f, std::max(0.f, t + 0.1f * ImGui::GetIO().MouseWheel));
+                    *p_value = t * (v_max - v_min) + v_min;
+                }
+
+                if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    t = 0.5f;
+                    *p_value = 0.5f * (v_min + v_max);
+                }
+
                 angle = angle_min + (angle_max - angle_min) * t;
                 angle_cos = cosf(angle);
                 angle_sin = sinf(angle);
@@ -376,7 +389,8 @@ namespace ImGuiKnobs {
                 for (auto n = 0; n < steps; n++) {
                     auto a = static_cast<float>(n) / (static_cast<float>(steps) - 1.f);
                     auto angle = knob.angle_min + (knob.angle_max - knob.angle_min) * a;
-                    knob.draw_tick(0.7f, 0.9f, 0.04f, angle, detail::GetPrimaryColorSet());
+                    if(angle < IMGUIKNOBS_PI * 1.99f)
+                        knob.draw_tick(0.7f, 0.9f, 0.04f, angle, detail::GetPrimaryColorSet());
                 }
 
                 knob.draw_circle(0.6f, detail::GetSecondaryColorSet(), true, 32);
