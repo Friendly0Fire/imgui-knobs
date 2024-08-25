@@ -191,8 +191,6 @@ namespace ImGuiKnobs {
                 is_active = ImGui::IsItemActive();
                 is_hovered = ImGui::IsItemHovered();
 
-                ImGui::SetItemUsingMouseWheel();
-
                 if (is_hovered && ImGui::GetIO().MouseWheel != 0.f) {
                     t = std::min(1.f, std::max(0.f, t + 0.1f * ImGui::GetIO().MouseWheel));
                     *p_value = t * (v_max - v_min) + v_min;
